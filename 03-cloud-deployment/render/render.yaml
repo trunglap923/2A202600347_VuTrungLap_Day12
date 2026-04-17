@@ -8,11 +8,12 @@ services:
     region: singapore
     plan: free
 
-    # 🔥 FIX: trỏ đúng file requirements
-    buildCommand: pip install -r railway/requirements.txt
+    # 🔥 FIX: Render cần biết thư mục chạy code gốc
+    rootDir: 03-cloud-deployment/railway
 
-    # 🔥 FIX: trỏ đúng module app trong folder railway
-    startCommand: uvicorn railway.app:app --host 0.0.0.0 --port $PORT
+    # Đã sửa lại vì có rootDir
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
 
     healthCheckPath: /health
     autoDeploy: true
