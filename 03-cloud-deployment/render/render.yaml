@@ -35,4 +35,4 @@ services:
     plan: free
     maxmemoryPolicy: allkeys-lru
     ipAllowList:
-      - source: render
+      - source: 0.0.0.0/0
