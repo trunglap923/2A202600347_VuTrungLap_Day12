@@ -94,6 +94,18 @@ graph TD
 
 ### Exercise 4.1-4.3: Test results
 
+**1. Bản Develop (Cơ bản - API Key):**
+
+```bash
+Testing /ask without API key...
+✅ Rejected without key correctly.
+Testing /ask with valid API key...
+✅ Accepted with valid key correctly.
+# Note: Bản develop chưa có Rate Limit nên step này được skip.
+```
+
+**2. Bản Production (Nâng cao - JWT + Rate Limit):**
+
 ```bash
 Testing /ask without JWT token...
 ✅ Rejected without key correctly.
@@ -108,17 +120,9 @@ Request 10 got 429 Too Many Requests as expected!
 
 ### Exercise 4.4: Cost guard implementation
 
-Để ngăn User lợi dụng AI Agent, hệ thống sử dụng tính năng Persistence của Redis. Thay vì dùng memory dễ bị mất, server làm theo logic sau:
+Em đã hoàn thành triển khai Cost Guard bảo vệ ngân sách sử dụng LLM:
 
-- Dùng Redis KEY định dạng `budget:{user_id}:{YYYY-MM}`
-- Dùng phương thức `INCRBYFLOAT` của Redis để cộng dồn lượng chi phí token. Kiểm tra số tiền vượt mức ngân sách (VD \$10/tháng) thì Block bằng mã lỗi HTTP `402 Payment Required`.
-- Gắn thời hạn `expire` cho Redis Key bằng 32 ngày để tự động reset hạn mức ngân sách vào chu kỳ tháng tiếp theo.
-
-## Part 5: Scaling & Reliability
-
-### Exercise 5.1-5.5: Implementation notes
-
-1. **Health checks**: Cung cấp `/health` (Liveness) để báo trạng thái chạy, và `/ready` (Readiness) ping đến Redis để báo sẵn sàng nhận request.
-2. **Graceful shutdown**: Bắt tín hiệu SIGTERM để tiến hành từ chối connection mới, và giữ server xử lý nốt cho tới khi các request đang chạy hoàn thành xong rồi mới exit.
-3. **Stateless design**: Chuyển logic lưu trạng thái (như memory lịch sử hội thoại) vào cơ sở dữ liệu chung là Redis. Bởi nếu chia app ra nhiều container instances, RAM của 1 instance sẽ không cập nhật sang instance khác.
-4. **Load balancing**: Nginx đóng vai trò phân tán Traffic (Reverse Proxy) chạy theo thuật toán Round-robin. Nhờ rải đều tải đến 3 instances Agent (`--scale agent=3`), hệ thống có thể tối ưu hiệu suất và tự động backup sang container khác nếu 1 cái bị Down.
+- **Cơ chế đếm**: Mỗi request được tính toán `usage` dựa trên số lượng token thực tế (Input/Output).
+- **Hạn mức (Quotas)**: Đặt giới hạn `$1.0/ngày` cho mỗi user để tránh spam và `$10.0/ngày` cho toàn hệ thống để bảo vệ ví tiền của chủ sở hữu.
+- **Xử lý vi phạm**: Khi user chạm mức 80% ngân sách, hệ thống sẽ ghi Log cảnh báo. Khi vượt 100%, server sẽ trả về lỗi `402 Payment Required` và chặn hoàn toàn các cuộc gọi LLM tiếp theo cho đến khi reset vào ngày hôm sau.
+- **Persistence**: Code hiện tại sử dụng `UsageRecord` class để quản lý. Trong bước tiếp theo (Part 5), dữ liệu này sẽ được đồng bộ hóa vào Redis để đảm bảo tính stateless và không bị reset khi server khởi động lại.
