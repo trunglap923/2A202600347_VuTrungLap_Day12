@@ -31,18 +31,35 @@ from pydantic import BaseModel
 import uvicorn
 from utils.mock_llm import ask
 
-# ── Redis (optional — fallback to in-memory dict nếu không có Redis)
-try:
-    import redis
+# ── Redis (Stateless Session Storage)
+USE_REDIS = False
+_redis = None
+_memory_store = {}
+
+def init_redis():
+    global _redis, USE_REDIS
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    _redis = redis.from_url(REDIS_URL, decode_responses=True)
-    _redis.ping()
-    USE_REDIS = True
-    print("✅ Connected to Redis")
-except Exception:
-    USE_REDIS = False
-    _memory_store: dict = {}
-    print("⚠️  Redis not available — using in-memory store (not scalable!)")
+    
+    max_retries = 5
+    for i in range(max_retries):
+        try:
+            import redis
+            client = redis.from_url(REDIS_URL, decode_responses=True)
+            client.ping()
+            _redis = client
+            USE_REDIS = True
+            print(f"✅ Connected to Redis at {REDIS_URL}")
+            return
+        except Exception as e:
+            print(f"⚠️  Redis attempt {i+1}/{max_retries} failed: {e}")
+            if i < max_retries - 1:
+                time.sleep(2)
+            else:
+                print("❌ Redis failed after retries — using in-memory store (not scalable!)")
+                USE_REDIS = False
+
+init_redis()
+
 
 
 logging.basicConfig(level=logging.INFO)
@@ -217,4 +234,7 @@ def ready():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)
+    # Dùng import string "app:app" thay vì object app 
+    # Tắt reload trong production để ổn định hơn
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
+

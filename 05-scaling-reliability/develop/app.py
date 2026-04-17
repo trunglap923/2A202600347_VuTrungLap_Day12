@@ -97,6 +97,21 @@ async def ask_agent(question: str):
     return {"answer": ask(question)}
 
 
+@app.get("/slow-chat")
+async def slow_chat():
+    """Endpoint xử lý chậm để test Graceful Shutdown."""
+    if not _is_ready:
+        raise HTTPException(503, "Agent not ready")
+    
+    logger.info("Starting slow task (10s)...")
+    import asyncio
+    await asyncio.sleep(10)
+    logger.info("Slow task finished!")
+    
+    return {"message": "Finished after 10 seconds"}
+
+
+
 # ──────────────────────────────────────────────────────────
 # HEALTH CHECKS — Phần quan trọng nhất của file này
 # ──────────────────────────────────────────────────────────

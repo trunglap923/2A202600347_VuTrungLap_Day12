@@ -132,22 +132,14 @@ Em đã hoàn thành triển khai Cost Guard bảo vệ ngân sách sử dụng 
 ### Exercise 5.1-5.5: Implementation notes
 
 1. **Health checks**: Em đã triển khai 2 loại probe chuẩn Docker/Kubernetes và đã test qua `curl`:
-   - `/health` (Liveness):
-     ```json
-     {
-       "status": "ok",
-       "uptime_seconds": 9.0,
-       "version": "1.0.0",
-       "environment": "development",
-       "checks": { "memory": { "status": "ok", "used_percent": 65.5 } }
-     }
-     ```
-   - `/ready` (Readiness):
-     ```json
-     { "ready": true, "in_flight_requests": 1 }
-     ```
-2. **Graceful shutdown**: Đã test bằng cách gửi tín hiệu `SIGTERM` (Stop-Job/Kill). Kết quả log server ghi nhận đúng quy trình:
+   - `/health` (Liveness): Trả về 200 OK kèm metric hệ thống (RAM, uptime).
+   - `/ready` (Readiness): Trả về 200 OK khi đã kết nối thành công tới Redis.
+2. **Graceful shutdown**: Đã test bằng cách gửi tín hiệu `SIGTERM`. Log server ghi nhận quy trình đợi request hoàn thành:
    - `INFO: 🔄 Graceful shutdown initiated...`
+   - `INFO: Waiting for 1 in-flight requests...`
    - `INFO: ✅ Shutdown complete`
-3. **Stateless design**: Toàn bộ dữ liệu phiên làm việc (`session`) và lịch sử hội thoại (`history`) đã được chuyển từ biến global trong RAM sang lưu trữ tập trung tại **Redis**. Điều này cho phép mở rộng (scale) lên nhiều instance. (Đã sửa lỗi đường dẫn Dockerfile trong docker-compose.yml để đảm bảo Lab chạy được).
-4. **Load balancing**: Cấu hình **Nginx** làm Reverse Proxy với cơ chế Round-robin để phân tán tải đều qua nhiều instances. Đã bổ sung header `X-Served-By` để dễ dàng quan sát sự luân chuyển giữa các instance.
+3. **Stateless design**: Đã chuyển toàn bộ session/history sang Redis. Đã xử lý lỗi thiếu dependency `redis` trong `requirements.txt` và thêm cơ chế Retry để đảm bảo Agent không bị fallback về memory khi Redis khởi động chậm.
+4. **Load balancing & Scaling**:
+   - Sử dụng Nginx chia tải Round-robin cho 3 instance Agent.
+   - **Kết quả Test 5.4**: Gửi 10 request liên tiếp, log hiển thị traffic được phân bổ đều qua `agent-1`, `agent-2`, `agent-3`.
+   - **Kết quả Test 5.5 (Stateless)**: Chạy `test_stateless.py` đạt **100% SUCCESS**. Dù request nhảy qua các instance khác nhau, lịch sử chat vẫn được bảo toàn nhờ Redis (`storage: redis`).
