@@ -74,3 +74,51 @@ graph TD
    - **Quản lý State**: Khó duy trì lịch sử hội thoại liên tục nếu không dùng database ngoài.
 2. **"Cold start" là gì?**: Là độ trễ xảy ra khi nền tảng phải khởi tạo môi trường chạy mới cho code sau một thời gian không có request.
 3. **Khi nào nên upgrade lên Cloud Run?**: Khi cần khả năng auto-scale mạnh mẽ, bảo mật cao và tích hợp sâu vào hệ sinh thái quản lý của GCP.
+
+### Exercise 3.1: Railway deployment
+
+- URL: https://labday12-production.up.railway.app
+- Screenshot: ![Screenshot](railway.png)
+
+### Exercise 3.2: Deploy Render
+
+- URL: https://ai-agent-j6yq.onrender.com
+- Screenshot: ![Screenshot](render.png)
+
+**So sánh `render.yaml` với `railway.toml`:**
+
+- `render.yaml`: Theo hướng quản lý **Infrastructure as Code (IaC)** toàn diện. Nó cho phép khai báo chi tiết nhiều services cùng lúc (cả Web backend và Redis), tự định nghĩa tài nguyên RAM/CPU, và cài đặt chi tiết `buildCommand`, `startCommand` cũng như Environment variables ngay trong yaml file.
+- `railway.toml`: Gọn nhẹ hơn, thiên hướng tự động nhận diện (Nixpacks/Buildpacks), tập trung chủ yếu vào tham số khởi chạy của một service cụ thể.
+
+## Part 4: API Security
+
+### Exercise 4.1-4.3: Test results
+
+```bash
+Testing /ask without JWT token...
+✅ Rejected without key correctly.
+Fetching JWT Token to use API...
+Testing /ask with valid JWT token...
+✅ Accepted with valid token correctly.
+Running 20 requests to test rate limit...
+Request 10 got 429 Too Many Requests as expected!
+✅ Rate limit works.
+✅ All tests passed successfully!
+```
+
+### Exercise 4.4: Cost guard implementation
+
+Để ngăn User lợi dụng AI Agent, hệ thống sử dụng tính năng Persistence của Redis. Thay vì dùng memory dễ bị mất, server làm theo logic sau:
+
+- Dùng Redis KEY định dạng `budget:{user_id}:{YYYY-MM}`
+- Dùng phương thức `INCRBYFLOAT` của Redis để cộng dồn lượng chi phí token. Kiểm tra số tiền vượt mức ngân sách (VD \$10/tháng) thì Block bằng mã lỗi HTTP `402 Payment Required`.
+- Gắn thời hạn `expire` cho Redis Key bằng 32 ngày để tự động reset hạn mức ngân sách vào chu kỳ tháng tiếp theo.
+
+## Part 5: Scaling & Reliability
+
+### Exercise 5.1-5.5: Implementation notes
+
+1. **Health checks**: Cung cấp `/health` (Liveness) để báo trạng thái chạy, và `/ready` (Readiness) ping đến Redis để báo sẵn sàng nhận request.
+2. **Graceful shutdown**: Bắt tín hiệu SIGTERM để tiến hành từ chối connection mới, và giữ server xử lý nốt cho tới khi các request đang chạy hoàn thành xong rồi mới exit.
+3. **Stateless design**: Chuyển logic lưu trạng thái (như memory lịch sử hội thoại) vào cơ sở dữ liệu chung là Redis. Bởi nếu chia app ra nhiều container instances, RAM của 1 instance sẽ không cập nhật sang instance khác.
+4. **Load balancing**: Nginx đóng vai trò phân tán Traffic (Reverse Proxy) chạy theo thuật toán Round-robin. Nhờ rải đều tải đến 3 instances Agent (`--scale agent=3`), hệ thống có thể tối ưu hiệu suất và tự động backup sang container khác nếu 1 cái bị Down.
