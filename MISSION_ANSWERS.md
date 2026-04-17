@@ -126,3 +126,28 @@ Em đã hoàn thành triển khai Cost Guard bảo vệ ngân sách sử dụng 
 - **Hạn mức (Quotas)**: Đặt giới hạn `$1.0/ngày` cho mỗi user để tránh spam và `$10.0/ngày` cho toàn hệ thống để bảo vệ ví tiền của chủ sở hữu.
 - **Xử lý vi phạm**: Khi user chạm mức 80% ngân sách, hệ thống sẽ ghi Log cảnh báo. Khi vượt 100%, server sẽ trả về lỗi `402 Payment Required` và chặn hoàn toàn các cuộc gọi LLM tiếp theo cho đến khi reset vào ngày hôm sau.
 - **Persistence**: Code hiện tại sử dụng `UsageRecord` class để quản lý. Trong bước tiếp theo (Part 5), dữ liệu này sẽ được đồng bộ hóa vào Redis để đảm bảo tính stateless và không bị reset khi server khởi động lại.
+
+## Part 5: Scaling & Reliability
+
+### Exercise 5.1-5.5: Implementation notes
+
+1. **Health checks**: Em đã triển khai 2 loại probe chuẩn Docker/Kubernetes và đã test qua `curl`:
+   - `/health` (Liveness):
+     ```json
+     {
+       "status": "ok",
+       "uptime_seconds": 9.0,
+       "version": "1.0.0",
+       "environment": "development",
+       "checks": { "memory": { "status": "ok", "used_percent": 65.5 } }
+     }
+     ```
+   - `/ready` (Readiness):
+     ```json
+     { "ready": true, "in_flight_requests": 1 }
+     ```
+2. **Graceful shutdown**: Đã test bằng cách gửi tín hiệu `SIGTERM` (Stop-Job/Kill). Kết quả log server ghi nhận đúng quy trình:
+   - `INFO: 🔄 Graceful shutdown initiated...`
+   - `INFO: ✅ Shutdown complete`
+3. **Stateless design**: Toàn bộ dữ liệu phiên làm việc (`session`) và lịch sử hội thoại (`history`) đã được chuyển từ biến global trong RAM sang lưu trữ tập trung tại **Redis**. Điều này cho phép mở rộng (scale) lên nhiều instance. (Đã sửa lỗi đường dẫn Dockerfile trong docker-compose.yml để đảm bảo Lab chạy được).
+4. **Load balancing**: Cấu hình **Nginx** làm Reverse Proxy với cơ chế Round-robin để phân tán tải đều qua nhiều instances. Đã bổ sung header `X-Served-By` để dễ dàng quan sát sự luân chuyển giữa các instance.
