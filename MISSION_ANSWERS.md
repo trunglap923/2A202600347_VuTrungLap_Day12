@@ -25,4 +25,52 @@
 
 ## Part 2: Docker
 
-_(Đang thực hiện...)_
+### Exercise 2.1: Câu hỏi về Dockerfile
+
+1. **Base image là gì?**: `python:3.11` (Bản đầy đủ).
+2. **Working directory là gì?**: `/app`
+3. **Tại sao COPY requirements.txt trước?**: Để tận dụng **Docker layer caching**. Nếu file requirements không thay đổi, Docker sẽ dùng lại layer đã build trước đó, giúp tăng tốc độ build đáng kể.
+4. **CMD vs ENTRYPOINT khác nhau thế nào?**:
+   - `CMD` cung cấp lệnh mặc định và có thể bị ghi đè hoàn toàn khi chạy container.
+   - `ENTRYPOINT` thiết lập lệnh chính sẽ luôn chạy, các tham số truyền vào lúc start container sẽ được nối thêm vào sau lệnh này.
+
+### Exercise 2.3: So sánh kích thước Image
+
+- **Develop (Single-stage)**: `1.66GB`. Sử dụng image `python:3.11` đầy đủ, chứa nhiều công cụ build và cache không cần thiết cho runtime.
+- **Production (Multi-stage)**: `236MB`. Nhờ sử dụng `python:3.11-slim` và cơ chế multi-stage để loại bỏ các dependencies build-time.
+- **Kết quả**: Bản Production giảm được khoảng **86%** dung lượng so với bản Develop.
+
+### Exercise 2.4: Docker Compose stack
+
+**Sơ đồ kiến trúc (Architecture Diagram):**
+
+```mermaid
+graph TD
+    Client[Người dùng] -->|HTTP Port 80| Nginx[Nginx Load Balancer]
+    Nginx -->|Proxy Port 8000| Agent1[Agent Instance 1]
+    Nginx -->|Proxy Port 8000| Agent2[Agent Instance 2]
+    Agent1 -->|Cache/Rate Limit Port 6379| Redis[(Redis)]
+    Agent2 -->|Cache/Rate Limit Port 6379| Redis
+    Agent1 -->|Vector Search Port 6333| Qdrant[(Qdrant DB)]
+    Agent2 -->|Vector Search Port 6333| Qdrant
+```
+
+**Các dịch vụ và cách giao tiếp:**
+
+1. **Nginx (Port 80)**: Điểm tiếp nhận traffic duy nhất từ bên ngoài (Client → Nginx). Nó phân phối yêu cầu (Load balancing) đến các instance của Agent đang lắng nghe ở cổng port 8000.
+2. **Agent (Port 8000)**: Xử lý logic chính của AI. Các instance này giao tiếp với Nginx (nhận request) và tương tác với Redis/Qdrant qua mạng nội bộ Docker (`internal` network).
+3. **Redis (Port 6379)**: Lưu trữ session, lịch sử hội thoại tạm thời và hỗ trợ giới hạn tốc độ (Rate limiting). Cả 2 Agent đều kết nối vào cảng 6379 của Redis.
+4. **Qdrant (Port 6333)**: Cơ sở dữ liệu vector dùng cho RAG, giúp Agent tìm kiếm thông tin liên quan từ kho kiến thức. Agent kết nối với Qdrant qua cổng 6333.
+
+---
+
+## Part 3: Cloud Deployment
+
+### Exercise 3.1: Câu hỏi thảo luận
+
+1. **Tại sao serverless (Lambda) không phải lúc nào cũng tốt cho AI agent?**:
+   - **Timeout**: AI agent thường mất nhiều thời gian chờ LLM phản hồi, dễ vượt giới hạn timeout của serverless.
+   - **Cold start**: Độ trễ khi khởi động instance mới làm trải nghiệm người dùng chậm đi.
+   - **Quản lý State**: Khó duy trì lịch sử hội thoại liên tục nếu không dùng database ngoài.
+2. **"Cold start" là gì?**: Là độ trễ xảy ra khi nền tảng phải khởi tạo môi trường chạy mới cho code sau một thời gian không có request.
+3. **Khi nào nên upgrade lên Cloud Run?**: Khi cần khả năng auto-scale mạnh mẽ, bảo mật cao và tích hợp sâu vào hệ sinh thái quản lý của GCP.
