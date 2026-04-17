@@ -154,12 +154,3 @@ Em đã hoàn thành triển khai Cost Guard bảo vệ ngân sách sử dụng 
 - **Kết quả Test 5.5 (Stateless)**: Chạy `test_stateless.py` đạt **100% SUCCESS**. Dù request nhảy qua các instance khác nhau, lịch sử chat vẫn được bảo toàn nhờ Redis (`storage: redis`).
 
 ---
-
-## Part 6: Final Project Certification
-
-- **Project Folder**: `my-production-agent/`
-- **Features**: Full integration of all lab parts.
-- **Readiness Score**: 20/20 (Passed).
-- **Security**: JWT + API Key + Cost Guard + Rate Limit + Non-root.
-- **Stability**: Graceful Shutdown + Health Checks + Load Balancing.
-- **Status**: **MISSION COMPLETED 100%.**
